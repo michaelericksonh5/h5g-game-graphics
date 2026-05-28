@@ -88,6 +88,19 @@ silhouette; consistent theme palette (from `slot-art-style-presets`); no flat `M
 box edges in 3D; win celebration reads as a payoff, not a flicker; nothing looks like placeholder
 programmer-art. GREEN only when it would survive "did you hire an artist?".
 
+**Two automatic RED fails** (the most common "a computer made this" tells, enforce strictly):
+
+- **Emoji or stock Unicode pictographs used as symbols** (🐉 🦈 🔔 👑 ☥). Symbols must be drawn in code
+  and material-shaded (`procedural-symbol-design`). Render-difference across devices = not shippable.
+- **Flat fills / 2-stop gradients with no material or lighting.** Premium surfaces show sculpted relief:
+  key + fill + **rim** light, a material (gold/gem/stone), and AO in crevices
+  (`procedural-textures-and-materials/references/sculpted-relief-shading.md`). A glossy-vector look that
+  never answers "where is the light / what material is this / how does it sit in depth" caps at YELLOW.
+
+When QA finds either, the fix is to send the asset back through the owning skill (symbol → symbol-design,
+panel → hud-and-ui, material/shader → textures or shaders) and re-grade — QA reviews *and drives the
+adjustment*, it doesn't just report.
+
 ## References
 
 - `references/performance-checklist.md` — how to measure FPS, frame budget, draw calls, memory; mobile throttling; triage order when frames drop

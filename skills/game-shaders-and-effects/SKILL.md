@@ -7,6 +7,48 @@ description: "Apply advanced visual effects and shaders to slot and casino games
 
 The library of visual effects that separate "looks like a real game" from "looks like a prototype." These run on the GPU — adding them costs milliseconds per frame, not hundreds.
 
+## Two jobs: post-FX *and* material shading
+
+This skill owns two distinct shader jobs:
+
+1. **Post-process FX** (most of this file) — bloom, motion blur, distortion, vignette, color grading: passes applied *on top of* a finished scene.
+2. **Material shading** — lighting a surface so it reads as *sculpted gold / faceted gem / carved stone* instead of a flat fill. This is the live-shader half of `procedural-textures-and-materials`' sculpted-relief technique, and it's the difference between "premium" and "preschool" symbols. Use it for hero symbols, special states, and any element that needs a view-tracking highlight or Fresnel rim a baked texture can't give.
+
+### Material/relief fragment shader (height → normal → Blinn + rim + Fresnel)
+
+Light a flat shape from a procedural (or baked) height field. For *static* materials, bake instead (`procedural-textures-and-materials/references/sculpted-relief-shading.md`); use this shader when the highlight must move or the rim must track the view.
+
+```glsl
+// PixiJS v8 filter frag — see custom-glsl-library.md for the makeFilter() wrapper.
+in vec2 vTextureCoord;
+uniform sampler2D uTexture;   // albedo (the material fill)
+uniform sampler2D uHeight;    // grayscale height field, same UVs
+uniform vec2  uTexel;         // 1.0/resolution
+uniform vec3  uLight;         // normalized light dir
+uniform float uShine;         // 32 stone .. 256 gem
+uniform float uSpecStr;       // 0.15 stone .. 1.0 gem/lacquer
+uniform vec3  uRimColor;      // cool/accent rim
+out vec4 fragColor;
+void main(){
+  vec4 albedo = texture(uTexture, vTextureCoord);
+  float hl = texture(uHeight, vTextureCoord - vec2(uTexel.x,0.)).r;
+  float hr = texture(uHeight, vTextureCoord + vec2(uTexel.x,0.)).r;
+  float hd = texture(uHeight, vTextureCoord - vec2(0.,uTexel.y)).r;
+  float hu = texture(uHeight, vTextureCoord + vec2(0.,uTexel.y)).r;
+  vec3  N  = normalize(vec3((hl-hr)*3.0, (hd-hu)*3.0, 1.0));
+  vec3  V  = vec3(0.0,0.0,1.0);
+  vec3  H  = normalize(uLight + V);
+  float diff = max(dot(N, uLight), 0.0);
+  float spec = uSpecStr * pow(max(dot(N, H), 0.0), uShine);
+  float rim  = pow(1.0 - max(dot(N, V), 0.0), 3.0);     // Fresnel edge
+  float ao   = mix(0.55, 1.0, texture(uHeight, vTextureCoord).r);
+  vec3  lit  = albedo.rgb * (0.3 + diff) * ao + spec + rim * uRimColor;
+  fragColor  = vec4(lit, albedo.a);
+}
+```
+
+Tune `uShine`/`uSpecStr`/`uRimColor` per material (full table in `sculpted-relief-shading.md`). Three.js/TSL surfaces should instead use `MeshPhysicalMaterial` + a procedural normal/roughness map (`threejs-game-3d`) — this GLSL path is the 2D PixiJS equivalent.
+
 ## PixiJS filter effects
 
 PixiJS v8 applies filters as post-process passes on any `Container`. Filters stack — apply multiple by passing an array.

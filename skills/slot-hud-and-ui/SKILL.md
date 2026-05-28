@@ -28,6 +28,47 @@ All UI components procedurally drawn with PixiJS v8. No image assets. Mobile-fir
 
 All measurements in CSS pixels at 1x. Scale proportionally.
 
+## Premium panels: material + depth (not flat fills)
+
+A flat gradient rectangle with a 1.5px stroke reads as "prototype UI." Premium HUD elements look like *physical, lit objects*: a beveled panel with a top rim highlight (light from above), an inner shadow at the bottom, a subtle inner glow, and a material fill from `procedural-textures-and-materials` (brushed metal, lacquer, carved stone — matched to the theme). Build every panel with this layered recipe instead of a single `roundRect().fill()`:
+
+```javascript
+// Premium beveled panel: material fill + top rim light + bottom inner shadow + inner glow.
+function makePanel(w, h, theme, { radius = 10, material = null } = {}) {
+  const c = new Container();
+  const r = radius;
+
+  // 1. Body — material texture if provided, else a multi-stop gradient (not 2-stop flat)
+  const body = new Graphics().roundRect(0, 0, w, h, r);
+  body.fill(material ? { texture: material } : { fill: makeVerticalGradient(theme.panelFill ?? ['#2a1d12','#140d07'], h) });
+  c.addChild(body);
+
+  // 2. Inner shadow (bottom/inset) — recessed depth
+  const shade = new Graphics().roundRect(1, 1, w - 2, h - 2, r - 1)
+    .stroke({ width: 3, color: 0x000000, alpha: 0.45, alignment: 1 });
+  c.addChild(shade);
+
+  // 3. Top rim highlight — the single strongest "lit from above" cue
+  const rim = new Graphics();
+  rim.moveTo(r, 1.5).lineTo(w - r, 1.5)
+     .stroke({ width: 1.5, color: 0xffffff, alpha: 0.5 });
+  c.addChild(rim);
+
+  // 4. Inner glow (theme accent, additive) — makes the panel feel energized
+  const glow = new Graphics().roundRect(2, 2, w - 4, h - 4, r - 1)
+    .stroke({ width: 2, color: theme.frameGlow ?? 0xf5c842, alpha: 0.25 });
+  glow.filters = [new BlurFilter({ strength: 6, quality: 2 })];
+  glow.blendMode = 'add';
+  c.addChild(glow);
+
+  return c;
+}
+```
+
+Buttons read as physical the same way: rounded bevel, **top specular highlight**, **bottom occlusion shadow**, and a pressed state that *insets* (darken + nudge down + shrink the top highlight) rather than just scaling. The Spin button is the hero — largest, most saturated, glowing ring. The win counter uses metallic/gem numerals (gradient fill + glow), and jackpot meters are tiered (Mini/Minor/Major/Grand) with distinct color-coded metal/gem frames. Keep one ornament language and corner radius across the whole shell so it reads as a crafted set.
+
+Apply `makePanel` under the balance/win/bet displays below in place of their flat `roundRect` backgrounds.
+
 ## Spin button (complete states)
 
 ```javascript

@@ -11,6 +11,14 @@ Generate every slot symbol in code using PixiJS v8 Graphics. No external PNGs. S
 
 Claude's default symbol is a colored rectangle with text on it. That's not a symbol — it's a label. A real slot symbol has: a shaped background (not a rectangle), a gradient fill calibrated to the symbol's tier value, an inner highlight that gives it gloss or dimension, an outer rim with a contrasting stroke, and a thematic glyph or icon at center. The difference between "placeholder" and "premium" is about 4 additional Graphics calls layered correctly.
 
+## NEVER ship emoji as symbols
+
+Emoji (🐉 🦈 🔔 👑 🪸 ☥) are the single biggest "a computer made this" tell. They render differently on every OS (Apple vs Android vs Windows), carry no theme cohesion, and share no light rig with the rest of the set. **Any emoji or stock Unicode pictograph used as a symbol's identity fails QA.** The glyph names in `slot-art-style-presets` (`symbolGlyphs`) are *layout placeholders only* — the shippable icon is drawn with `Graphics`/bezier paths from `references/icon-library.md` and lit/shaded as below. Plain letters A/K/Q/J/10 are the one exception, and even those get a beveled, material-filled treatment (never raw `Text`).
+
+## Premium = sculpted relief, not flat vector
+
+A gradient + gloss ellipse caps you at "glossy vector." Premium symbols read as *physical objects hit by light* — gold with hot specular glints and dark occlusion in crevices, gems with faceted internal fire, carved stone with matte diffuse and AO in the cuts. The technique that converts a flat fill into a sculpted, painted surface is **height field → surface normal → Blinn-Phong + rim light + fake AO + a painterly light ramp**, owned by `procedural-textures-and-materials/references/sculpted-relief-shading.md` with the GLSL in `game-shaders-and-effects/references/custom-glsl-library.md`. Three questions every drawn symbol must answer: *where is the light, what material is this, how does it sit in depth?* Key + fill + **rim** is the trio that reads as "you hired an artist" — rim light especially is the cheapest, strongest premium signal.
+
 ## Symbol composition layers (mandatory, in order)
 
 Every symbol is a `Container` with these children, bottom to top:
@@ -133,27 +141,29 @@ function addSymbolGlow(container, size, color) {
 }
 ```
 
-## Symbol gradient mapping by tier
+## Symbol MATERIAL mapping by tier
 
-Load `references/symbol-gradients.md` for the full table. Quick reference:
+Value = visual investment. Higher-paying symbols get a richer *material* (not just a brighter gradient) — a sculpted, lit surface from `procedural-textures-and-materials`. The card royals are themed by being carved from the theme's material (jade, obsidian, gold leaf, ice, circuitry), never plain colored letters. Load `references/symbol-gradients.md` for the gradient ramps and `procedural-textures-and-materials/references/sculpted-relief-shading.md` for the lit-relief pass applied on top.
 
-| Tier | Examples | Gradient direction | Primary |
+| Tier | Examples | Material treatment | Light response |
 |---|---|---|---|
-| Grand special | WILD, SCATTER, BONUS | Radial center-out | Saturated pure hue |
-| Premium (4-5 symbol match) | ANKH, DRAGON, PHARAOH, A | Diagonal top-left | Deep-to-bright metallic |
-| High (3+ match) | SCARAB, CROWN, K | Vertical top-to-bottom | Gem-style (dark edges, bright center) |
-| Mid (any match) | EYE, COIN, Q | Vertical | Single hue gradient |
-| Low (3+ match only) | J, T | Vertical | Muted, low-saturation |
+| Grand special | WILD, SCATTER, BONUS | Polished gem / faceted jewel, radial inner fire | High specular (shine 128–256) + Fresnel rim + animated highlight |
+| Premium (4–5 match) | ANKH, DRAGON, PHARAOH | Gold leaf or lacquer, domain-warped grain | Hot specular glints + AO in crevices + rim light |
+| High (3+ match) | SCARAB, CROWN | Hammered/brushed metal or gemstone | Anisotropic or faceted spec, darkened cell borders |
+| Mid (any match) | EYE, COIN | Carved stone / enamel, single material | Matte diffuse + soft rim, AO in cuts |
+| Low (royals A K Q J 10) | letters | Theme material (jade/obsidian/ice), beveled | Bevel highlight top, occlusion shadow bottom — one shared light rig |
+
+Every tier runs the **height → normal → Blinn + rim + AO + form-light ramp** pass; the difference between tiers is material recipe, specular exponent, and ornamentation density — not whether they're shaded.
 
 ## Thematic icon vocabulary by genre
 
-Read `references/icon-library.md` for Unicode + SVG paths. Quick guide:
+The shippable icon is **drawn in code** — `Graphics`/bezier paths, then lit and material-shaded. Read `references/icon-library.md` for the construction sketches (gem, crown, coin, mask, lotus, shell, skull, etc.). The characters below are *naming/silhouette references only* — they describe the shape to construct, NOT something to render as `Text`. Drawing an emoji or stock pictograph here fails QA.
 
-**Egyptian:** ☥ (Ankh), 𓂀 (Eye of Horus), 𓆣 (Scarab), △ (Pyramid), 𝔸 (styled A for low)
-**Cyberpunk:** ⬡ (hex grid), ⧫ (diamond), ◈ (circuit), ▲ (triangle), ◉ (target)
-**Asian Prosperity:** 福 (Fortune), 🐉 (Dragon glyph), ⭐ (Star), 🪙 (Coin path), ♦ (gem)
-**Fantasy:** ⚔ (Sword), 🌙 (Moon), ⚡ (Lightning), 👑 (Crown path), 🔮 (Orb path)
-**Vegas Classic:** 7 (Seven), ♠♥♦♣ (Card suits), 🔔 (Bell path), 🍒 (Cherry path), BAR
+**Egyptian:** Ankh (cross+loop path), Eye of Horus (almond + brow + teardrop), Scarab (beetle body + wing cases), Pyramid (triangle + facet lines), royals carved in sandstone/gold
+**Cyberpunk:** hex-grid badge, faceted diamond, circuit node, triangle, target ring — emissive edges
+**Asian Prosperity:** Fortune medallion (coin + engraved motif), Dragon (sinuous body + scales), Star burst, Coin, gem — lacquer + gold inlay
+**Fantasy:** Sword (blade + crossguard + pommel), Moon crescent, Lightning bolt, Crown (base + points + jewels), Orb — runed metal + frost
+**Vegas Classic:** Seven (beveled numeral), card suits, Bell (trapezoid body + clapper + loop), Cherry (twin circles + stem), BAR — mirror-polish chrome
 
 ## Minimum size for mobile readability
 

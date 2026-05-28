@@ -210,6 +210,65 @@ function drawWoodGrain(ctx, w, h, ringScale = 8) {
 }
 ```
 
+## Sculpted relief: turning a flat shape into a lit, painted surface
+
+A material fill alone is flat. What makes a symbol or panel read as *sculpted and painted* is lighting a procedural **height field**: derive a surface normal from the heightmap, then shade it (Blinn-Phong + rim + fake AO) through a painterly ramp. This is the keystone technique — `procedural-symbol-design` and `slot-hud-and-ui` both depend on it.
+
+Pipeline: `height(uv)` (fBm + Worley + the shape's own silhouette) → **normal** via central differences → **Blinn-Phong** diffuse+spec → **rim light** → **AO** in the crevices → run the diffuse term through a **form-light ramp** instead of using it raw.
+
+```javascript
+// Canvas2D relief bake: height field -> normal -> shaded RGBA. Run once at load.
+function shadeRelief(ctx, w, h, heightAt, albedo, opts = {}) {
+  const L = opts.light ?? [-0.4, -0.6, 0.7];   // light dir (x,y,z), normalized
+  const ll = Math.hypot(...L), l = L.map(v => v / ll);
+  const shine = opts.shine ?? 48, strength = opts.strength ?? 2.5;
+  const ambient = opts.ambient ?? 0.3, rimColor = opts.rim ?? [180, 200, 255];
+  const img = ctx.createImageData(w, h);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    // central-difference normal from the height field
+    const dx = heightAt(x + 1, y) - heightAt(x - 1, y);
+    const dy = heightAt(x, y + 1) - heightAt(x, y - 1);
+    let nx = -dx * strength, ny = -dy * strength, nz = 1;
+    const nl = Math.hypot(nx, ny, nz); nx /= nl; ny /= nl; nz /= nl;
+    const diff = Math.max(nx*l[0] + ny*l[1] + nz*l[2], 0);
+    // half-vector spec (view = +z)
+    const hx = l[0], hy = l[1], hz = l[2] + 1, hn = Math.hypot(hx, hy, hz);
+    const spec = Math.pow(Math.max((nx*hx + ny*hy + nz*hz) / hn, 0), shine);
+    const rim = Math.pow(1 - nz, 3);                 // edge-facing = bright
+    const ao = 0.5 + 0.5 * heightAt(x, y);           // crevices darker
+    const lit = (ambient + ramp(diff)) * ao;         // painterly ramp on diffuse
+    const i = (y * w + x) * 4;
+    img.data[i]   = Math.min(albedo[0]*lit + spec*255 + rim*rimColor[0], 255);
+    img.data[i+1] = Math.min(albedo[1]*lit + spec*255 + rim*rimColor[1], 255);
+    img.data[i+2] = Math.min(albedo[2]*lit + spec*255 + rim*rimColor[2], 255);
+    img.data[i+3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
+}
+```
+
+The GLSL fragment-shader version (for live Fresnel/animated highlights instead of a bake) lives in `game-shaders-and-effects/references/custom-glsl-library.md`. Full recipe, per-material parameters, and the ramp/Worley-facet variants are in `references/sculpted-relief-shading.md`.
+
+## Painterly ramps (not 2-stop gradients)
+
+Flat 2-stop gradients are a "cheap" tell. Painters shade form on a *bell curve*: saturation peaks in the mid-tones (the terminator) and drops at both the highlight and the core shadow, and color *temperature* shifts (warm highlight → most-saturated terminator → cooler shadow, with a warm bounce on the shadow edge). Build a 4–6 stop ramp and sample it by the Lambert term:
+
+```javascript
+// 256px 1D ramp LUT, sampled by diffuse (0..1). Bake once; reuse everywhere.
+function makeFormRamp(stops) {                 // stops: [[t,'#hex'],...]
+  const c = new OffscreenCanvas(256, 1), g = c.getContext('2d');
+  const grd = g.createLinearGradient(0, 0, 256, 0);
+  for (const [t, hex] of stops) grd.addColorStop(t, hex);
+  g.fillStyle = grd; g.fillRect(0, 0, 256, 1);
+  const px = g.getImageData(0, 0, 256, 1).data;
+  return (t) => { const i = Math.max(0, Math.min(255, t*255|0))*4;
+    return [px[i], px[i+1], px[i+2]]; };       // returns rgb for a lit value
+}
+// e.g. gold: shadow#3a2708 -> terminator#b9831f (most saturated) -> light#fff3b0
+```
+
+Use this `ramp()` to drive `shadeRelief` and to fill premium gradients; it is the difference between "plastic" and "painted."
+
 ## Performance: baking and atlasing
 
 Texture generation is slow (iterating every pixel). Do it during the loading screen, bake to a canvas, and don't regenerate:
@@ -233,3 +292,4 @@ For PixiJS: use the baked `Texture` as a `TilingSprite` or `Sprite` covering the
 
 - `references/noise-functions.md` — extended noise library including 2D/3D simplex, cellular/Voronoi, domain warp
 - `references/material-gallery.md` — reference renders and parameters for 20+ surface types: corroded copper, cracked stone, ice, stained glass, circuit board, parchment, obsidian
+- `references/sculpted-relief-shading.md` — the height→normal→Blinn+rim+AO+ramp pipeline (Canvas2D bake + GLSL), per-material params (gold leaf, polished gem, hammered metal, lacquer, carved stone), and the painterly form-light ramp

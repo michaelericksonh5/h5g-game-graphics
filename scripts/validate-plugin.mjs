@@ -66,13 +66,18 @@ for (const name of skillDirs) {
     fail(`${skillFile}: contains placeholder marker`);
   }
 
-  // Reference citations: `references/<file>.md` tokens must resolve in this skill dir.
-  const refs = [...content.matchAll(/references\/([A-Za-z0-9._-]+\.md)/g)]
-    .map((m) => m[1]).filter((v, i, a) => a.indexOf(v) === i);
+  // Reference citations: `references/<file>.md` resolves in THIS skill dir; a
+  // `<other-skill>/references/<file>.md` pointer resolves against that skill instead.
+  const refs = [...content.matchAll(/(?:([A-Za-z0-9._-]+)\/)?references\/([A-Za-z0-9._-]+\.md)/g)]
+    .map((m) => ({ skill: m[1], file: m[2] }))
+    .filter((v, i, a) => a.findIndex((x) => x.skill === v.skill && x.file === v.file) === i);
   for (const ref of refs) {
+    // A path prefix that names a real skill = cross-skill pointer; check that skill's dir.
+    const target = ref.skill && exists(`skills/${ref.skill}`) ? ref.skill : name;
     refCount++;
-    if (!exists(`skills/${name}/references/${ref}`)) {
-      fail(`${skillFile}: cited reference not found: references/${ref}`);
+    if (!exists(`skills/${target}/references/${ref.file}`)) {
+      const cite = target === name ? `references/${ref.file}` : `${target}/references/${ref.file}`;
+      fail(`${skillFile}: cited reference not found: ${cite}`);
     }
   }
 }

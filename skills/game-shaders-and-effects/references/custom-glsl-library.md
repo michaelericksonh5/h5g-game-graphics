@@ -119,9 +119,44 @@ symbol.filters = [holo];
 app.ticker.add((t) => { holo.resources.uniforms.uniforms.uTime += t.deltaMS / 1000; });
 ```
 
+## Material / relief shading (sculpted symbols)
+
+The main height→normal→Blinn+rim+Fresnel shader is in `SKILL.md`. Supporting variants:
+
+**No separate height texture?** Derive height from albedo luminance (cheap, works for engraved icons):
+
+```glsl
+float heightFromLum(sampler2D t, vec2 uv){
+  vec3 c = texture(t, uv).rgb; return dot(c, vec3(0.299,0.587,0.114));
+}
+```
+
+**Faceted gem** — quantize the normal into flat facets and spike the spec for jewel "fire":
+
+```glsl
+// after computing N: snap to a coarse lattice so each facet is flat, then high-pow spec
+vec3 Nf = normalize(floor(N * 6.0) / 6.0 + 0.001);
+float fire = pow(max(dot(Nf, H), 0.0), 220.0);     // sharp, bright glints
+vec3 jitter = 0.12 * sin(Nf.xyx * 17.0);           // per-facet color shift
+fragColor.rgb += fire + jitter;
+```
+
+**Anisotropic brushed metal** — bend the half-vector along the brush axis `T` (e.g. `vec3(1,0,0)`):
+
+```glsl
+float TdotH = dot(normalize(T - N*dot(T,N)), H);
+float aniso = uSpecStr * pow(sqrt(max(1.0 - TdotH*TdotH, 0.0)), uShine);
+```
+
+**Feeding the height map:** bake a grayscale height field once to a `RenderTexture` (PixiJS) from your
+fBm/Worley generator (`procedural-textures-and-materials/references/noise-functions.md`), bind it as
+`uHeight`, and animate only `uLight` for a moving glint. Bake static symbols entirely; reserve this live
+shader for hero/special symbols — see `filter-performance.md` for the per-frame budget.
+
 ## Notes
 
 - Update `uTexelSize`/`uResolutionY` on resize.
 - Stack filters sparingly — see `filter-performance.md` for the mobile budget.
 - Reserve heavy multi-pass bloom for 3D (Three.js `UnrealBloomPass`); the additive glow above is the
   2D-affordable substitute.
+- Material shading is per-pixel: bake when static, run the live shader only for animated highlights.

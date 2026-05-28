@@ -16,6 +16,30 @@ When the user names a genre, output the THEME_CONFIG block for that genre and te
 - The audio mood configures `adaptive-game-music`
 - The shader recs configure `game-shaders-and-effects`
 
+## Palette + glyphs are direction, not the finished look
+
+A `THEME_CONFIG` is the *starting* palette and silhouette vocabulary — it is **not** permission to fill flat shapes with hex colors and drop emoji on top. Every shippable surface is **material-shaded**: symbols, chassis, and UI panels run the sculpted-relief pass (`procedural-textures-and-materials/references/sculpted-relief-shading.md`) so they read as lit gold / faceted gem / carved stone, not flat vector. Two hard rules:
+
+- **`symbolGlyphs` strings (☥ 龍 🦈 🔔 …) are layout placeholders only.** The real icon is drawn with `Graphics`/bezier paths (`procedural-symbol-design`) and lit. Shipping the emoji is an automatic QA fail.
+- **Every preset implies a light rig and a material per element** (table below). Apply key + fill + **rim** consistently across the whole set so it reads as one crafted world.
+
+## Per-genre material & light direction
+
+Pair each palette with these materials and lighting moods (the "did you hire an artist?" layer):
+
+| Genre | Hero materials | Light mood | Ornamentation |
+|---|---|---|---|
+| Egyptian | polished gold, lapis/turquoise inlay, sandstone | hard warm desert key, hot gold specular | hieroglyph engraving, beveled stone frame |
+| Cyberpunk | wet metal, emissive neon glass, holographic | dark base + saturated neon rim, chromatic bloom | circuit traces, hex panels, scanlines |
+| Asian Prosperity | red lacquer, gold inlay, jade | warm lantern glow, soft temple light | cloud/dragon filigree, double-eave frame |
+| Norse / Dark Fantasy | weathered bronze, cold steel, frosted gem | stormy backlight, glowing emissive runes | hammered-metal texture, runic engraving |
+| Underwater / Atlantis | pearl, coral, wet refractive gem | caustic dapples, god-rays, soft depth-fog | bioluminescent glow, bubble particles |
+| Vegas Classic | mirror chrome, glossy enamel, hot neon | high-key neon-sign glow, clean specular | beveled chrome, 7/BAR mirror polish |
+| Sci-Fi | brushed alloy, glass, emissive panels | cool key, holographic accents | hard-surface panel lines, HUD motifs |
+| Fairy Tale | gilded page, soft gemstone, pastel enamel | soft painterly rim, gentle bloom | storybook filigree, sparkle |
+| Gothic / Horror | aged wrought iron, cracked stone, deep gem | low-key candle/moon backlight, fog | wrought-iron filigree, weathered edges |
+| Irish / Celtic | polished gold coin, emerald, brass | soft meadow light, warm gold specular | Celtic knotwork interlace |
+
 ## Egyptian — Pharaoh's Gold
 
 ```javascript
