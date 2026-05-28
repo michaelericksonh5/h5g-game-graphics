@@ -5,7 +5,7 @@ HTML5 slot/arcade games with zero external art assets** — every visual, sound,
 generated in code. The goal: AI output that reads as "did you hire an artist?", not "did a computer
 make this?".
 
-## What's in the suite (20 skills, two lanes + a shared core)
+## What's in the suite (21 skills, two lanes + a shared core)
 
 **Slot lane** (casino / reel games):
 
@@ -14,6 +14,7 @@ make this?".
 | `slot-art-style-presets` | theme/palette/visual direction — **load first** |
 | `slot-state-machine` | headless engine STRUCTURE (RNG seam, reel data, paylines, state, events) |
 | `pixijs-slot-graphics` | 2D reels, symbols, win FX (PixiJS v8) |
+| `slot-backgrounds-and-frames` | painted scene background + reel frame/bezel/chassis (material-shaded, baked) |
 | `procedural-symbol-design` | drawing the symbol set |
 | `slot-symbol-animation-states` | symbol animation state machine |
 | `slot-bonus-features` | bonus rounds / free spins features |
@@ -45,8 +46,8 @@ make this?".
 ## Canonical build orders
 
 **Slot:** `slot-art-style-presets → slot-state-machine (+ h5g-slot-math for math) → pixijs-slot-graphics →
-procedural-symbol-design → slot-symbol-animation-states → slot-bonus-features → slot-hud-and-ui →
-particle-systems-and-juice → tonejs-game-audio (→ procedural-sfx-design / adaptive-game-music) →
+slot-backgrounds-and-frames → procedural-symbol-design → slot-symbol-animation-states → slot-bonus-features →
+slot-hud-and-ui → particle-systems-and-juice → tonejs-game-audio (→ procedural-sfx-design / adaptive-game-music) →
 game-qa-and-testing`
 
 **Side-scroller:** `sidescroller-engine → tilemap-and-level-design → platformer-physics →
@@ -72,7 +73,7 @@ side-scroller / platformer") and injects the matching order.
 
 ```
 .claude-plugin/plugin.json   # plugin manifest
-skills/<name>/SKILL.md       # 20 skills (auto-discovered), each with references/
+skills/<name>/SKILL.md       # 21 skills (auto-discovered), each with references/
 hooks/hooks.json             # UserPromptSubmit orchestration (auto-loaded)
 hooks/graphics-suite-orchestrator.mjs
 evals/graphics-suite-scenarios.md
@@ -99,7 +100,7 @@ node scripts/validate-plugin.mjs     # structure + reference validation
 ```powershell
 pwsh -File build-plugin.ps1          # src/ -> skills/ (plugin tree)
 pwsh -File build-skills.ps1          # src/ -> *.skill (standalone artifacts)
-node scripts/validate-plugin.mjs     # confirm 20 skills + all references resolve
+node scripts/validate-plugin.mjs     # confirm 21 skills + all references resolve
 ```
 
 ## Orchestration hook
