@@ -68,13 +68,18 @@ const hasScrollerVerbNoun = buildVerbs.some((v) => prompt.includes(v)) && scroll
 const hasScrollerSignal = scrollerSignals.some((s) => prompt.includes(s));
 const scroller = hasScrollerIntent || hasScrollerVerbNoun || hasScrollerSignal;
 
-// Decide the lane. Side-scroller signals are more specific, so they win a tie. "arcade game"
-// alone is ambiguous and falls back to the slot/casino lane (which already mentions arcade).
+// Decide the lane. Side-scroller signals are more specific, so they win a tie. Any other
+// "build me a game" request with no explicit type DEFAULTS to the slot/casino lane — slot is
+// the house specialty, so unspecified game builds start there unless the user says otherwise.
 let lane = null;
+let defaulted = false;
 if (scroller && !hasSlotIntent) lane = "scroller";
 else if (slot) lane = "slot";
 else if (scroller) lane = "scroller";
-else if (buildVerbs.some((v) => prompt.includes(v)) && prompt.includes("arcade game")) lane = "slot";
+else if (buildVerbs.some((v) => prompt.includes(v)) && /\bgames?\b/.test(prompt)) {
+  lane = "slot";
+  defaulted = true;
+}
 
 if (!lane) process.exit(0);
 
@@ -125,9 +130,16 @@ const SCROLLER_CONTEXT = [
   "Output a single self-contained HTML5 build, mobile-first, zero external art assets.",
 ].join(" ");
 
+let additionalContext = lane === "scroller" ? SCROLLER_CONTEXT : SLOT_CONTEXT;
+if (defaulted) {
+  additionalContext =
+    "No game type was specified — DEFAULT to a slot/casino-style game unless the user asks for something else. " +
+    additionalContext;
+}
+
 process.stdout.write(JSON.stringify({
   hookSpecificOutput: {
     hookEventName: "UserPromptSubmit",
-    additionalContext: lane === "scroller" ? SCROLLER_CONTEXT : SLOT_CONTEXT,
+    additionalContext,
   },
 }));
