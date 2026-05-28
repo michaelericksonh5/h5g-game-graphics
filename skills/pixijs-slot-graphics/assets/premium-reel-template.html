@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Premium Slot Reel Template</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    width: 100%; height: 100%;
+    background: radial-gradient(ellipse at center, #1a0a3a 0%, #0a0418 70%, #000 100%);
+    overflow: hidden;
+    font-family: system-ui, -apple-system, sans-serif;
+    color: #fff;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #stage {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+  }
+  canvas { display: block; touch-action: manipulation; }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+
+<script type="importmap">
+{
+  "imports": {
+    "pixi.js": "https://cdn.jsdelivr.net/npm/pixi.js@8.17.0/dist/pixi.min.mjs",
+    "gsap": "https://cdn.jsdelivr.net/npm/gsap@3.14.0/+esm"
+  }
+}
+</script>
+
+<script type="module">
+import { Application, Container, Graphics, Text, FillGradient, BlurFilter, Sprite, Texture } from 'pixi.js';
+import { gsap } from 'gsap';
+
+/* =========================================================================
+ * THEME — change colors here to retheme. Every visual reads from this block.
+ * ========================================================================= */
+const THEME = {
+  // Frame & chassis
+  chassisOuter:  ['#2a0d5e', '#160a3d', '#0a0418'],   // outer cabinet
+  chassisInner:  ['#1a0840', '#0d0428'],              // inner reel housing
+  frameStroke:   0xac1eff,                            // electric purple rim
+  frameStrokeAlpha: 0.85,
+
+  // Reel viewport
+  reelBg:        ['#0a0418', '#1a0840', '#0a0418'],   // vertical, dark to mid to dark
+  reelDividerColor: 0xac1eff,
+  reelDividerAlpha: 0.25,
+
+  // Symbols — placeholder card values, will get themed in real builds
+  symbolFills: {
+    A: ['#fff5d6', '#f5c842', '#9c6a1a'],   // gold A
+    K: ['#ffd1d1', '#ff4d6d', '#7a0d2a'],   // ruby K
+    Q: ['#d6e6ff', '#3b8eea', '#0d2d6e'],   // sapphire Q
+    J: ['#d6ffd9', '#42d65a', '#0d6e1a'],   // emerald J
+    T: ['#ffe2d1', '#ff8a3b', '#7a3a0d'],   // amber 10
+    WILD:    ['#fff', '#ffe200', '#c97a00'],
+    SCATTER: ['#e8d6ff', '#ac1eff', '#3a0d6e'],
+    BONUS:   ['#ffd6f7', '#ff2bd6', '#6e0d52'],
+  },
+  symbolStroke: 0xffffff,
+  symbolStrokeAlpha: 0.6,
+  symbolLabel:  0x1a0840,
+
+  // Buttons
+  spinFill: ['#ffea66', '#ff7b1b', '#8a2e00'],
+  spinStroke: 0xfff5d6,
+  spinLabel: 0x2a0d00,
+
+  // Win line
+  winLineColor: 0xffe200,
+  winLineGlow:  0xff7b1b,
+};
+
+/* =========================================================================
+ * LAYOUT — derived from canvas size; everything scales together.
+ * ========================================================================= */
+const REEL_COUNT = 5;
+const VISIBLE_ROWS = 3;
+const SYMBOL_KEYS = ['A','K','Q','J','T','WILD','SCATTER','BONUS'];
+
+// Spin choreography (the "weight" of the reels)
+const SPIN_TIMING = {
+  spinUpDuration: 0.4,      // accel from rest
+  reelStopBase: 0.6,        // first reel stops at 600ms
+  reelStopStagger: 0.18,    // each subsequent reel +180ms
+  anticipationHold: 1.2,    // extra delay on last reel if near-win
+  settleEase: 'back.out(2.2)', // GSAP easing for the snap
+  settleOvershoot: 38,      // px the reel overshoots before settling up
+};
+
+/* =========================================================================
+ * APP SETUP
+ * ========================================================================= */
+const stageEl = document.getElementById('stage');
+const baseW = Math.min(window.innerWidth, 540);
+const baseH = Math.min(window.innerHeight, 900);
+const canvasW = baseW;
+const canvasH = baseH;
+
+const app = new Application();
+await app.init({
+  width: canvasW,
+  height: canvasH,
+  backgroundAlpha: 0,
+  antialias: true,
+  resolution: Math.min(window.devicePixelRatio, 2),
+  autoDensity: true,
+});
+stageEl.appendChild(app.canvas);
+
+/* =========================================================================
+ * HELPERS
+ * ========================================================================= */
+function makeVerticalGradient(colors, height) {
+  // FillGradient is the v8 way; multi-stop gradients are required for depth.
+  const g = new FillGradient(0, 0, 0, height);
+  if (colors.length === 1) {
+    g.addColorStop(0, colors[0]);
+    g.addColorStop(1, colors[0]);
+  } else {
+    colors.forEach((c, i) => g.addColorStop(i / (colors.length - 1), c));
+  }
+  return g;
+}
+
+function makeRadialIsh(colors, w, h) {
+  // PixiJS v8 FillGradient supports radial but for cross-version safety we
+  // approximate with a diagonal multi-stop fill. Works on any v8.x.
+  const g = new FillGradient(w * 0.3, h * 0.2, w * 0.7, h * 0.8);
+  colors.forEach((c, i) => g.addColorStop(i / (colors.length - 1), c));
+  return g;
+}
+
+function drawRoundedPanel(g, x, y, w, h, r, fill, strokeColor, strokeAlpha, strokeWidth = 2) {
+  g.roundRect(x, y, w, h, r);
+  g.fill({ fill });
+  if (strokeColor !== undefined) {
+    g.roundRect(x, y, w, h, r);
+    g.stroke({ width: strokeWidth, color: strokeColor, alpha: strokeAlpha ?? 1, alignment: 0.5 });
+  }
+}
+
+// Additive glow layer underneath a shape — this is THE pattern that makes
+// elements feel luminous instead of flat. Replicates "I am emitting light"
+// rather than "I have a drop shadow".
+function makeGlowSprite(width, height, color, intensity = 0.7) {
+  const glow = new Graphics();
+  glow.ellipse(0, 0, width * 0.55, height * 0.55);
+  glow.fill({ color, alpha: intensity });
+  const blur = new BlurFilter({ strength: 24, quality: 4 });
+  glow.filters = [blur];
+  glow.blendMode = 'add';
+  return glow;
+}
+
+/* =========================================================================
+ * SYMBOL FACTORY
+ * Procedural symbols. In a themed game you replace this with sprite assets,
+ * but the procedural version means the template works with zero external files.
+ * ========================================================================= */
+function makeSymbol(key, size) {
+  const container = new Container();
+  container.label = key;
+
+  const fill = makeVerticalGradient(THEME.symbolFills[key], size);
+
+  // Background "gem" shape — rounded for high-value letters, hexagonal for special
+  const bg = new Graphics();
+  const isSpecial = ['WILD', 'SCATTER', 'BONUS'].includes(key);
+  if (isSpecial) {
+    // Hexagonal medallion
+    const pts = [];
+    for (let i = 0; i < 6; i++) {
+      const a = (Math.PI / 3) * i - Math.PI / 2;
+      pts.push(size * 0.42 * Math.cos(a), size * 0.42 * Math.sin(a));
+    }
+    bg.poly(pts);
+    bg.fill({ fill });
+    bg.poly(pts);
+    bg.stroke({ width: 3, color: THEME.symbolStroke, alpha: 0.9 });
+  } else {
+    drawRoundedPanel(bg, -size*0.42, -size*0.42, size*0.84, size*0.84, size*0.14,
+                     fill, THEME.symbolStroke, THEME.symbolStrokeAlpha, 3);
+  }
+  bg.x = size / 2;
+  bg.y = size / 2;
+
+  // Inner highlight to give it a glossy top
+  const highlight = new Graphics();
+  highlight.ellipse(0, -size*0.18, size*0.32, size*0.12);
+  highlight.fill({ color: 0xffffff, alpha: 0.35 });
+  highlight.x = size / 2;
+  highlight.y = size / 2;
+
+  // Label
+  const label = new Text({
+    text: key === 'T' ? '10' : key === 'WILD' ? '★' : key === 'SCATTER' ? '✦' : key === 'BONUS' ? '◆' : key,
+    style: {
+      fontFamily: 'system-ui',
+      fontSize: isSpecial ? size * 0.42 : size * 0.5,
+      fontWeight: '900',
+      fill: THEME.symbolLabel,
+      stroke: { color: 0xffffff, width: 2, alpha: 0.6 },
+      align: 'center',
+    },
+  });
+  label.anchor.set(0.5);
+  label.x = size / 2;
+  label.y = size / 2;
+
+  container.addChild(bg, highlight, label);
+  container.width = size;
+  container.height = size;
+  return container;
+}
+
+/* =========================================================================
+ * CHASSIS — the cabinet around the reels
+ * ========================================================================= */
+const chassis = new Container();
+app.stage.addChild(chassis);
+
+const margin = 18;
+const headerH = 80;
+const footerH = 130;
+const reelAreaW = canvasW - margin * 2;
+const reelAreaH = canvasH - margin * 2 - headerH - footerH;
+const reelAreaY = margin + headerH;
+
+// Outer cabinet panel
+const cabinet = new Graphics();
+drawRoundedPanel(
+  cabinet, margin, margin, canvasW - margin * 2, canvasH - margin * 2, 28,
+  makeVerticalGradient(THEME.chassisOuter, canvasH - margin * 2),
+  THEME.frameStroke, THEME.frameStrokeAlpha, 3
+);
+chassis.addChild(cabinet);
+
+// Glow underneath the cabinet rim — makes the purple stroke read as neon
+const cabinetGlow = makeGlowSprite(canvasW, canvasH, 0xac1eff, 0.35);
+cabinetGlow.x = canvasW / 2;
+cabinetGlow.y = canvasH / 2;
+chassis.addChildAt(cabinetGlow, 0);
+
+// Inner reel housing
+const housing = new Graphics();
+drawRoundedPanel(
+  housing, margin + 12, reelAreaY, reelAreaW - 24, reelAreaH, 18,
+  makeVerticalGradient(THEME.chassisInner, reelAreaH),
+  0xffffff, 0.15, 1.5
+);
+chassis.addChild(housing);
+
+// Header title
+const titleGlow = makeGlowSprite(280, 60, 0xff7b1b, 0.4);
+titleGlow.x = canvasW / 2;
+titleGlow.y = margin + headerH / 2;
+chassis.addChild(titleGlow);
+
+const title = new Text({
+  text: 'PREMIUM REELS',
+  style: {
+    fontFamily: 'system-ui',
+    fontSize: 30,
+    fontWeight: '900',
+    letterSpacing: 4,
+    fill: { fill: makeVerticalGradient(['#ffea66', '#ff7b1b'], 40) },
+    stroke: { color: 0xfff5d6, width: 1.5, alpha: 0.9 },
+  },
+});
+title.anchor.set(0.5);
+title.x = canvasW / 2;
+title.y = margin + headerH / 2;
+chassis.addChild(title);
+
+/* =========================================================================
+ * REELS
+ * Each reel is a Container with a strip of symbols, masked to a viewport.
+ * Symbol cell height is derived from reel area, not hardcoded.
+ * ========================================================================= */
+const reelGap = 6;
+const cellSize = Math.floor((reelAreaW - 24 - reelGap * (REEL_COUNT - 1)) / REEL_COUNT);
+const reelStripLen = VISIBLE_ROWS + 8; // extras above & below for the scroll
+
+const reels = [];
+const reelsContainer = new Container();
+reelsContainer.x = margin + 12 + 12;
+reelsContainer.y = reelAreaY + 14;
+chassis.addChild(reelsContainer);
+
+for (let r = 0; r < REEL_COUNT; r++) {
+  const reel = new Container();
+  reel.x = r * (cellSize + reelGap);
+  reel.y = 0;
+
+  // Build a strip of symbols
+  const strip = new Container();
+  reel.addChild(strip);
+
+  const symbols = [];
+  for (let i = 0; i < reelStripLen; i++) {
+    const key = SYMBOL_KEYS[Math.floor(Math.random() * 5)]; // bias to low-value cards
+    const sym = makeSymbol(key, cellSize);
+    sym.y = (i - 3) * cellSize; // start with rows -3 to top, visible rows below
+    strip.addChild(sym);
+    symbols.push(sym);
+  }
+
+  // Mask — symbols outside the visible rows must be hidden, otherwise they
+  // visibly clip across the chassis and look like a bug.
+  const mask = new Graphics();
+  mask.rect(0, 0, cellSize, cellSize * VISIBLE_ROWS);
+  mask.fill({ color: 0xffffff });
+  reel.addChild(mask);
+  strip.mask = mask;
+
+  // Subtle vertical dividers between reels
+  if (r > 0) {
+    const divider = new Graphics();
+    divider.moveTo(0, 0).lineTo(0, cellSize * VISIBLE_ROWS);
+    divider.stroke({ width: 1, color: THEME.reelDividerColor, alpha: THEME.reelDividerAlpha });
+    divider.x = -reelGap / 2;
+    reel.addChild(divider);
+  }
+
+  // Motion blur filter — applied only when spinning, intensity tied to velocity
+  const blur = new BlurFilter({ strength: 0, quality: 2 });
+  blur.blurX = 0;
+  strip.filters = [blur];
+
+  reelsContainer.addChild(reel);
+  reels.push({ container: reel, strip, symbols, blur, spinning: false });
+}
+
+/* =========================================================================
+ * SPIN CONTROLLER
+ * ========================================================================= */
+let spinInProgress = false;
+
+function spinReel(reel, stopDelay) {
+  return new Promise((resolve) => {
+    reel.spinning = true;
+    // Phase 1: accelerate the strip downward indefinitely while blurring
+    const state = { offset: 0, velocity: 0 };
+    let lastUpdate = performance.now();
+
+    gsap.to(state, {
+      velocity: 1800, // px/sec
+      duration: SPIN_TIMING.spinUpDuration,
+      ease: 'power2.in',
+    });
+    gsap.to(reel.blur, {
+      blurY: 22,
+      duration: SPIN_TIMING.spinUpDuration,
+      ease: 'power2.in',
+    });
+
+    const ticker = (delta) => {
+      const now = performance.now();
+      const dt = (now - lastUpdate) / 1000;
+      lastUpdate = now;
+      state.offset += state.velocity * dt;
+      const wrap = cellSize * reelStripLen;
+      for (const sym of reel.symbols) {
+        sym.y = ((sym.y + state.velocity * dt) % wrap);
+        // Keep it in the visible band by wrapping above into below
+        if (sym.y > cellSize * (reelStripLen - 3)) {
+          sym.y -= wrap;
+        }
+      }
+    };
+    app.ticker.add(ticker);
+
+    // Phase 2: after stopDelay, decelerate and snap to grid
+    gsap.delayedCall(stopDelay, () => {
+      // Randomize landing symbols
+      reel.symbols.forEach((sym, i) => {
+        const newKey = SYMBOL_KEYS[Math.floor(Math.random() * SYMBOL_KEYS.length * 0.7)];
+        const parent = sym.parent;
+        const oldY = sym.y;
+        parent.removeChild(sym);
+        const replacement = makeSymbol(newKey, cellSize);
+        replacement.y = oldY;
+        parent.addChild(replacement);
+        reel.symbols[i] = replacement;
+      });
+
+      gsap.to(state, {
+        velocity: 0,
+        duration: 0.3,
+        ease: 'power2.out',
+      });
+      gsap.to(reel.blur, {
+        blurY: 0,
+        duration: 0.4,
+        ease: 'power2.out',
+      });
+
+      // After velocity settles, snap to grid with overshoot
+      gsap.delayedCall(0.3, () => {
+        app.ticker.remove(ticker);
+
+        // Snap each symbol to the nearest cell boundary, with the visible
+        // window holding 3 rows. Symbols at indices 3,4,5 are the visible ones.
+        reel.symbols.sort((a, b) => a.y - b.y);
+        reel.symbols.forEach((sym, i) => {
+          const targetY = (i - 3) * cellSize;
+          gsap.fromTo(sym,
+            { y: targetY + SPIN_TIMING.settleOvershoot },
+            { y: targetY, duration: 0.5, ease: SPIN_TIMING.settleEase }
+          );
+        });
+
+        gsap.delayedCall(0.5, () => {
+          reel.spinning = false;
+          resolve();
+        });
+      });
+    });
+  });
+}
+
+async function spin() {
+  if (spinInProgress) return;
+  spinInProgress = true;
+  spinBtn.eventMode = 'none';
+  spinBtn.alpha = 0.5;
+
+  // Determine if there's an "anticipation" — last reel takes extra time.
+  // In a real game this is computed from the math model (e.g. 2 scatters
+  // already landed means the third reel could trigger a bonus). For the
+  // template we trigger it ~25% of the time.
+  const anticipate = Math.random() < 0.25;
+
+  const stopPromises = reels.map((reel, i) => {
+    let delay = SPIN_TIMING.reelStopBase + i * SPIN_TIMING.reelStopStagger;
+    if (anticipate && i === REEL_COUNT - 1) {
+      delay += SPIN_TIMING.anticipationHold;
+    }
+    return spinReel(reel, delay);
+  });
+
+  await Promise.all(stopPromises);
+
+  // Check for any matching adjacent symbols on the middle row (super simple win detection)
+  const middleRow = reels.map(r => r.symbols.find(s => s.y === 0)?.label);
+  let matchCount = 1;
+  for (let i = 1; i < middleRow.length; i++) {
+    if (middleRow[i] === middleRow[0]) matchCount++;
+    else break;
+  }
+  if (matchCount >= 3) {
+    celebrateWin(matchCount);
+  }
+
+  spinInProgress = false;
+  spinBtn.eventMode = 'static';
+  spinBtn.alpha = 1;
+}
+
+/* =========================================================================
+ * WIN CELEBRATION
+ * Two-layer glow line + scaled symbol pulse + screen shake.
+ * Tier-scaled: 3 = small, 4 = big, 5 = mega.
+ * ========================================================================= */
+function celebrateWin(tier) {
+  const lineY = reelsContainer.y + cellSize * 1.5;
+  const lineX1 = reelsContainer.x;
+  const lineX2 = reelsContainer.x + tier * cellSize + (tier - 1) * reelGap;
+
+  // Wide blurred glow underneath
+  const glowLine = new Graphics();
+  glowLine.moveTo(lineX1, lineY).lineTo(lineX2, lineY);
+  glowLine.stroke({ width: 18, color: THEME.winLineGlow, alpha: 0.7, cap: 'round' });
+  glowLine.filters = [new BlurFilter({ strength: 12, quality: 3 })];
+  glowLine.blendMode = 'add';
+  app.stage.addChild(glowLine);
+
+  // Sharp line on top
+  const sharpLine = new Graphics();
+  sharpLine.moveTo(lineX1, lineY).lineTo(lineX2, lineY);
+  sharpLine.stroke({ width: 4, color: THEME.winLineColor, alpha: 1, cap: 'round' });
+  app.stage.addChild(sharpLine);
+
+  // Pulse the lines
+  gsap.fromTo([glowLine, sharpLine],
+    { alpha: 0 },
+    { alpha: 1, duration: 0.2, yoyo: true, repeat: 5, ease: 'power2.inOut',
+      onComplete: () => { glowLine.destroy(); sharpLine.destroy(); }
+    });
+
+  // Pulse the winning symbols
+  for (let i = 0; i < tier; i++) {
+    const sym = reels[i].symbols.find(s => s.y === 0);
+    if (sym) {
+      gsap.fromTo(sym.scale,
+        { x: 1, y: 1 },
+        { x: 1.2, y: 1.2, duration: 0.2, yoyo: true, repeat: 5, ease: 'power2.inOut' }
+      );
+    }
+  }
+
+  // Screen shake — tier-scaled
+  const shakeMag = tier * 2;
+  gsap.to(chassis, {
+    x: `+=${shakeMag}`,
+    duration: 0.04,
+    yoyo: true, repeat: 9,
+    ease: 'sine.inOut',
+    onComplete: () => { chassis.x = 0; }
+  });
+
+  // Hook for audio — in a real build this calls into tonejs-game-audio
+  if (window.onWin) window.onWin(tier);
+}
+
+/* =========================================================================
+ * SPIN BUTTON
+ * Multi-layer: outer glow, gradient fill, inner highlight, embossed label.
+ * ========================================================================= */
+const btnY = canvasH - margin - footerH / 2;
+const btnRadius = 52;
+
+const btnGlow = makeGlowSprite(btnRadius * 3, btnRadius * 3, 0xff7b1b, 0.5);
+btnGlow.x = canvasW / 2;
+btnGlow.y = btnY;
+chassis.addChild(btnGlow);
+
+const spinBtn = new Container();
+spinBtn.x = canvasW / 2;
+spinBtn.y = btnY;
+spinBtn.eventMode = 'static';
+spinBtn.cursor = 'pointer';
+
+const btnFill = new Graphics();
+btnFill.circle(0, 0, btnRadius);
+btnFill.fill({ fill: makeVerticalGradient(THEME.spinFill, btnRadius * 2) });
+btnFill.circle(0, 0, btnRadius);
+btnFill.stroke({ width: 3, color: THEME.spinStroke, alpha: 0.9 });
+
+// Inner highlight (gives 3D pop)
+const btnHighlight = new Graphics();
+btnHighlight.ellipse(0, -btnRadius * 0.4, btnRadius * 0.6, btnRadius * 0.22);
+btnHighlight.fill({ color: 0xffffff, alpha: 0.5 });
+
+const btnLabel = new Text({
+  text: 'SPIN',
+  style: {
+    fontFamily: 'system-ui',
+    fontSize: 22,
+    fontWeight: '900',
+    letterSpacing: 2,
+    fill: THEME.spinLabel,
+    stroke: { color: 0xffffff, width: 1.5, alpha: 0.8 },
+  },
+});
+btnLabel.anchor.set(0.5);
+
+spinBtn.addChild(btnFill, btnHighlight, btnLabel);
+app.stage.addChild(spinBtn);
+
+// Pulse the button glow while idle
+gsap.to(btnGlow.scale, {
+  x: 1.15, y: 1.15,
+  duration: 1.2, yoyo: true, repeat: -1,
+  ease: 'sine.inOut',
+});
+
+spinBtn.on('pointertap', () => {
+  // Press feedback
+  gsap.fromTo(spinBtn.scale,
+    { x: 1, y: 1 },
+    { x: 0.92, y: 0.92, duration: 0.08, yoyo: true, repeat: 1, ease: 'power2.inOut' }
+  );
+  spin();
+});
+
+/* =========================================================================
+ * Auto-resize on viewport change (mobile orientation, browser resize)
+ * ========================================================================= */
+window.addEventListener('resize', () => {
+  // Letterbox the canvas to maintain aspect; real games do full responsive
+  // layouts but this template stays simple.
+  const scale = Math.min(window.innerWidth / canvasW, window.innerHeight / canvasH);
+  app.canvas.style.width = (canvasW * scale) + 'px';
+  app.canvas.style.height = (canvasH * scale) + 'px';
+});
+window.dispatchEvent(new Event('resize'));
+</script>
+</body>
+</html>

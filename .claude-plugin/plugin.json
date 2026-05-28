@@ -1,0 +1,21 @@
+{
+  "name": "h5g-game-graphics",
+  "displayName": "H5G Game Graphics & Audio",
+  "version": "0.1.0",
+  "description": "Build production-quality mobile-first HTML5 slot/arcade games with zero external art assets — PixiJS/Three.js graphics, Tone.js audio, procedural symbols/textures/SFX, a headless slot engine, and a QA/sign-off gate. Defers all slot-math correctness to h5g-slot-math.",
+  "author": {
+    "name": "High 5 Games",
+    "email": "michael.erickson@high5games.com"
+  },
+  "license": "UNLICENSED",
+  "keywords": [
+    "slot",
+    "pixijs",
+    "threejs",
+    "tonejs",
+    "procedural",
+    "game-art",
+    "html5",
+    "h5g"
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "description": "Graphics_Skills orchestration. Injects the canonical multi-skill load order only when the submitted prompt looks like a request to build a slot/arcade game.",
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/graphics-suite-orchestrator.mjs\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}
