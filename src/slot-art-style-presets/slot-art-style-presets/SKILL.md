@@ -22,6 +22,7 @@ A `THEME_CONFIG` is the *starting* palette and silhouette vocabulary — it is *
 
 - **`symbolGlyphs` strings (☥ 龍 🦈 🔔 …) are layout placeholders only.** The real icon is drawn with `Graphics`/bezier paths (`procedural-symbol-design`) and lit. Shipping the emoji is an automatic QA fail.
 - **Every preset implies a light rig and a material per element** (table below). Apply key + fill + **rim** consistently across the whole set so it reads as one crafted world.
+- **Theme-element exclusivity (H5G rule):** a motif used *as a symbol* must not also decorate backgrounds, frames, or UI. If the marigold is HP2, strip every environmental marigold and use other theme elements (banners, candles, lanterns, pottery) instead — otherwise the hero symbol's identity is diluted and players misread the reels. Pick each preset's symbol motifs first, then build the environment from the *leftover* vocabulary.
 
 ## Per-genre material & light direction
 

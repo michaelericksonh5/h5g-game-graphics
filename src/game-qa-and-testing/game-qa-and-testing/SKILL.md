@@ -101,6 +101,19 @@ When QA finds either, the fix is to send the asset back through the owning skill
 panel → hud-and-ui, material/shader → textures or shaders) and re-grade — QA reviews *and drives the
 adjustment*, it doesn't just report.
 
+**Symbol-set gates (H5G production rules — apply to any slot symbol set):**
+
+- **Black-fill silhouette test** — fill each high-pay symbol solid black; the HP set must show
+  **zero** silhouette overlap. Two HPs that read as the same blob = fail (back to symbol-design).
+- **Two-scale readability** — verify at bonus **0.667x** (~84px symbol), not just base size:
+  silhouettes distinct, card letters and coin credit values legible. Detail that dies at 84px = fail.
+- **Shared-silhouette differentiation** — bonus coins/peppers reusing one shape must differ on hue
+  **and** value/lightness **and** painted pattern (grayscale/colorblind sim must still separate them).
+- **One shared light rig** — every symbol lit by the same key/fill/rim direction. Mixed light
+  direction across a set is a "computer made this" tell = fail.
+- **No drawn outlines** — figure-ground via glow aura + rim light + value contrast, not black strokes.
+- **Theme-element exclusivity** — a motif used as a symbol must not also appear in the background/frame.
+
 ## References
 
 - `references/performance-checklist.md` — how to measure FPS, frame budget, draw calls, memory; mobile throttling; triage order when frames drop

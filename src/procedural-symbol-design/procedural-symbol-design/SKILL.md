@@ -19,6 +19,24 @@ Emoji (🐉 🦈 🔔 👑 🪸 ☥) are the single biggest "a computer made thi
 
 A gradient + gloss ellipse caps you at "glossy vector." Premium symbols read as *physical objects hit by light* — gold with hot specular glints and dark occlusion in crevices, gems with faceted internal fire, carved stone with matte diffuse and AO in the cuts. The technique that converts a flat fill into a sculpted, painted surface is **height field → surface normal → Blinn-Phong + rim light + fake AO + a painterly light ramp**, owned by `procedural-textures-and-materials/references/sculpted-relief-shading.md` with the GLSL in `game-shaders-and-effects/references/custom-glsl-library.md`. Three questions every drawn symbol must answer: *where is the light, what material is this, how does it sit in depth?* Key + fill + **rim** is the trio that reads as "you hired an artist" — rim light especially is the cheapest, strongest premium signal.
 
+## H5G symbol taxonomy & role map
+
+Use H5G's house symbol vocabulary so the art, engine, and math agree. Full table and the
+production rules are in `references/h5g-symbol-taxonomy.md`. The short version:
+
+- **HP1…HPn** — high-pay hero *items* (no characters); HP1 is the top symbol, most visual weight.
+- **LP1…LPn** — card values A/K/Q/J/10 re-skinned as a *themed object* carrying the letter (never raw `Text`).
+- **WD** — wild (plain / expanding / sticky / stacked / walking); strongest glow of the standard set.
+- **WY1 / scatter-coin** — currency-value coin, server-placed, **persists** (hold-and-collect).
+- **JP1** — jackpot coin, visually distinct from WY1; 3+ triggers the wheel.
+- **SF** — scatter / feature trigger (with an anticipation tell).
+- **R1** — replacement/transform symbol. **BL** — blank cell shown before server data arrives.
+- **Bonus-coin variants** — one shared silhouette, many roles (multiplier / wide / +1 free spin / scatter).
+- **Badge events** (not reel symbols) — OMC "One More Chance", Wild-Coin badge, PreCog anticipation.
+
+Mechanical roles (substitution, persistence, triggers) live in `slot-state-machine`; all
+probability/RTP/odds for those roles defer to `h5g-slot-math`. This skill owns their *identity*.
+
 ## Symbol composition layers (mandatory, in order)
 
 Every symbol is a `Container` with these children, bottom to top:
@@ -175,8 +193,28 @@ At a 5-reel layout on a 390px-wide phone, each symbol cell is ~70px. At that siz
 
 Test every symbol at 70×70 CSS pixels before finalizing.
 
+## Two scales, one black-fill test (H5G readability gates)
+
+H5G symbols ship at **two** scales and must survive both — bake at the larger and verify at the smaller:
+- **Base 1.0x** — ~148px cell (~125px symbol). Full detail.
+- **Bonus 0.667x** — ~99px cell (~84px symbol). Silhouettes still distinct, card letters and
+  coin credit values still legible (min ~10px numeral height). Filigree/micro-detail dies here —
+  use 2–3 bold elements, not lacework. Also sanity-check ~60px for the paytable.
+
+Two non-negotiable differentiation tests before finalizing a set:
+1. **Black-fill silhouette test** — fill each high-pay symbol solid black; the HP set must have
+   **zero** silhouette overlap (each in a distinct shape zone). If two read as the same blob, redesign one.
+2. **Shared-silhouette set** (bonus coins/peppers that reuse one shape) — members must differ on
+   **hue AND value/lightness AND a painted pattern** so they survive a grayscale/colorblind sim;
+   color alone is not enough.
+
+And the house look: **no drawn outlines** — separate symbols with a soft colored glow aura + warm
+rim light + value contrast, and light the *entire set* with one shared rig (warm key upper-left,
+cool fill lower-right, soft rim). See `references/h5g-symbol-taxonomy.md`.
+
 ## References
 
+- `references/h5g-symbol-taxonomy.md` — H5G house symbol naming (HP/LP/WD/WY/JP/SF/R/BL + bonus coins + badges), role map, and the six production rules (black-fill, two-scale, shared-silhouette, glow-not-outline, shared light rig, theme-element exclusivity)
 - `references/symbol-gradients.md` — complete gradient mapping per tier and genre
 - `references/icon-library.md` — Unicode characters, SVG path data for thematic icons, programmatic icon drawing recipes
 - `references/symbol-animation-states.md` — the five animation states (idle breathing, landing bounce, win highlight, dimmed, special) — link to `slot-symbol-animation-states` skill

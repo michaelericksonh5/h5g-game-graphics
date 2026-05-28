@@ -225,6 +225,29 @@ const EXAMPLE_PAR_SHEET = {
 };
 ```
 
+## Symbol roles the engine must handle (H5G vocabulary)
+
+The engine owns the *structure* of each role; all probability/RTP/weighting defers to `h5g-slot-math`.
+
+- **HP1…HPn / LP1…LPn** — normal paying symbols (high/low pay). Just keys in the paytable.
+- **WD (wild)** — substitutes in line/ways eval (see `checkLine`). Variants the engine drives:
+  expanding (fills its reel), sticky (held across respins), stacked (consecutive on a strip),
+  walking (shifts one reel per respin). Identity/art is `procedural-symbol-design`.
+- **SF / SCATTER** — pays on count, not line; triggers free spins/bonus. Emit an `anticipation`
+  event when N−1 have landed so the visual layer can slow the last reel.
+- **WY1 / scatter-coin** — currency-value coin that is **server-placed and persists** on the grid
+  across respins (hold-and-collect). The engine tracks placed coins + their values as state, not
+  as a reel-strip draw.
+- **JP1 / jackpot coin** — like a coin but counts toward a jackpot trigger (e.g. 3+ → wheel).
+- **R1 / replacement** — a symbol injected by a transform step (mystery reveal, upgrade). Resolve
+  the transform *before* `evaluateWins`.
+- **BL / blank** — placeholder cell rendered before server data arrives; never appears in a paid result.
+- **Bonus-coin variants** — multiplier / wide / +1-free-spin / scatter coins that mutate the
+  accumulator during the bonus. The engine applies their effect; the math model owns the values.
+
+Persistence matters: coins, sticky wilds, and accumulator state survive between respins, so keep
+them in engine state — do not re-draw them from the reel strip each spin.
+
 ## Connecting to the visual layer
 
 ```javascript
