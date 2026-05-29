@@ -1,0 +1,44 @@
+name: Notify marketplace
+
+# Fires the marketplace sync workflow when this plugin publishes a release.
+# Deployed to each plugin repo from claude-plugins/.github/templates/.
+#
+# Triggers:
+#   - push to a tag matching v* or *--v*  (the user's release tag conventions)
+#   - push to main when plugin.json changes (catches version bumps without tags)
+#   - manual                              (workflow_dispatch from Actions tab)
+#
+# Requires repo secret MARKETPLACE_SYNC_TOKEN: a fine-grained PAT with
+# Contents: read+write on michaelericksonh5/claude-plugins.
+
+on:
+  push:
+    tags:
+      - 'v*'
+      - '*--v*'
+  workflow_dispatch:
+
+concurrency:
+  group: notify-marketplace
+  cancel-in-progress: true
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch plugin-released event to claude-plugins
+        env:
+          GH_TOKEN: ${{ secrets.MARKETPLACE_SYNC_TOKEN }}
+        run: |
+          if [[ -z "$GH_TOKEN" ]]; then
+            echo "::error::MARKETPLACE_SYNC_TOKEN secret is not set on this repo."
+            echo "Create a fine-grained PAT with Contents: read+write on michaelericksonh5/claude-plugins,"
+            echo "then add it as a repo secret named MARKETPLACE_SYNC_TOKEN."
+            exit 1
+          fi
+          gh api repos/michaelericksonh5/claude-plugins/dispatches \
+            -f event_type=plugin-released \
+            -F client_payload[plugin]="${{ github.event.repository.name }}" \
+            -F client_payload[ref]="${{ github.ref }}" \
+            -F client_payload[sha]="${{ github.sha }}"
+          echo "Dispatched plugin-released to claude-plugins for ${{ github.event.repository.name }} @ ${{ github.ref }}"
